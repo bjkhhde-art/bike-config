@@ -454,7 +454,7 @@ async function renderSuspHistory() {
       <div class="susp-type">${isFork ? '🍴 Federgabel' : '🔵 Dämpfer'}${comp.serial ? ' · ' + comp.serial : ''}</div>
       ${maxBadges.length
         ? `<div class="max-badges">${maxBadges.map(m => `<span class="max-badge">${m}</span>`).join('')}</div>` : ''}
-      <div class="hint-clicks">Clicks immer vom voll zugezogenen Anschlag (= 0) zählen</div>
+      <div class="hint-clicks">Clicks immer vom voll geschlossen (voll im Uhrzeigersinn) Anschlag (= 0) zählen</div>
     </div>
     ${entries}
     <button class="fab" onclick="showSuspSettingForm()">＋</button>`;
