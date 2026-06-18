@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0D0D0D">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>Bike Config</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="toast" class="toast"></div>
+
+  <main id="view" class="view"></main>
+
+  <nav id="nav" class="bottom-nav">
+    <button class="nav-btn active" data-tab="bikes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="18.5" cy="17.5" r="3.5"/>
+        <circle cx="5.5"  cy="17.5" r="3.5"/>
+        <path d="M15 6a1 1 0 0 0-1-1h-1L9 17"/>
+        <path d="M12 6H7L5.5 17M18.5 14L15 6"/>
+      </svg>
+      <span>Bikes</span>
+    </button>
+    <button class="nav-btn" data-tab="bauteile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/>
+        <path d="M7 7h.01"/>
+      </svg>
+      <span>Bauteile</span>
+    </button>
+    <button class="nav-btn" data-tab="fahrwerk">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20V8M8 20V14M4 20v-4M16 20V4M20 20v-8"/>
+      </svg>
+      <span>Fahrwerk</span>
+    </button>
+    <button class="nav-btn" data-tab="service">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+      </svg>
+      <span>Service</span>
+    </button>
+  </nav>
+
+  <!-- Modal (Bottom Sheet) -->
+  <div id="modal-bg" class="modal-bg hidden" onclick="closeModal()">
+    <div id="modal" class="modal" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+</body>
+</html>
