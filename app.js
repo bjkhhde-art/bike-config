@@ -42,6 +42,16 @@ function getUserId() {
   return id;
 }
 
+async function resolveUserId() {
+  const cookieId = getUserId();
+  const { data } = await sb
+    .from('user_aliases')
+    .select('main_user_id')
+    .eq('cookie_user_id', cookieId)
+    .single();
+  return data?.main_user_id ?? cookieId;
+}
+
 // ──────────── HELPERS ────────────
 function toast(msg, type = '') {
   const t = document.getElementById('toast');
@@ -972,7 +982,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 });
 
 (async function init() {
-  S.uid = getUserId();
+  S.uid = await resolveUserId();
   await loadBikes();
   setTab('bikes');
 })();
