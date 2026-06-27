@@ -3,8 +3,8 @@
 // ================================================================
 
 // ──────────── CONFIG ────────────
-const SUPABASE_URL = 'https://lrzgcqoqcwicpuuuhaoj.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_uunR3UQ9rttiK8dG85IedQ__Tn1duVK';
+const SUPABASE_URL = 'https://xzummprezpelooztdnnp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_ecMxYd2Lao32W6PmZqtbvQ_0s6l1tGS';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const COOKIE = 'bikeconfig_user_id';
 
@@ -28,6 +28,7 @@ const S = {
   suspSettings: {},   // { [compId]: [...settings] }
   serviceLog:   [],
   suspCompId:   null, // drill-down
+  showReplaced: false,
 };
 
 // ──────────── USER-ID (Cookie) ────────────
@@ -40,16 +41,6 @@ function getUserId() {
   const id = crypto.randomUUID();
   document.cookie = `${COOKIE}=${id};max-age=31536000;path=/`;
   return id;
-}
-
-async function resolveUserId() {
-  const cookieId = getUserId();
-  const { data } = await sb
-    .from('user_aliases')
-    .select('main_user_id')
-    .eq('cookie_user_id', cookieId)
-    .single();
-  return data?.main_user_id ?? cookieId;
 }
 
 // ──────────── HELPERS ────────────
@@ -136,7 +127,8 @@ async function loadComponents() {
   if (!S.bikeId) { S.components = []; return; }
   const { data, error } = await sb
     .from('bike_components').select('*')
-    .eq('bike_id', S.bikeId).order('baugruppe').order('created_at');
+    .eq('bike_id', S.bikeId)
+    .order('baugruppe').order('replaced_at', { ascending: false }).order('created_at');
   if (error) { toast('Fehler beim Laden der Bauteile', 'err'); return; }
   S.components = data || [];
 }
@@ -271,6 +263,31 @@ function renderBikeChips() {
 }
 
 // ── Bauteile ──
+function renderCompRow(c, isReplaced) {
+  const actions = isReplaced
+    ? `<button class="btn-icon danger" onclick="deleteComponent('${c.id}')">🗑️</button>`
+    : `<button class="btn-icon" onclick="showComponentForm('${c.id}')">✏️</button>
+       <button class="btn-icon accent" onclick="showReplaceForm('${c.id}')" title="Ersetzen">🔄</button>
+       <button class="btn-icon danger" onclick="deleteComponent('${c.id}')">🗑️</button>`;
+
+  return `
+    <div class="comp-row ${isReplaced ? 'replaced' : ''}">
+      <div class="comp-info">
+        <div class="comp-name">${c.komponente}</div>
+        ${[c.marke, c.produktname].filter(Boolean).length
+          ? `<div class="comp-sub">${[c.marke, c.produktname].filter(Boolean).join(' · ')}</div>` : ''}
+        ${c.infos ? `<div class="comp-notes">${c.infos}</div>` : ''}
+        <div class="comp-meta">
+          ${c.preis ? `<span class="comp-price">${fmtPrice(c.preis)}</span>` : ''}
+          ${c.gekauft ? `<span class="comp-date">${fmtDate(c.gekauft)}</span>` : ''}
+          ${isReplaced && c.replaced_at
+            ? `<span class="replaced-badge">Ausgebaut ${fmtDate(c.replaced_at)}</span>` : ''}
+        </div>
+      </div>
+      <div class="comp-actions">${actions}</div>
+    </div>`;
+}
+
 function renderBauteile() {
   const v = document.getElementById('view');
   if (!S.bikes.length) {
@@ -279,53 +296,62 @@ function renderBauteile() {
     return;
   }
 
-  const totalVal = S.components.reduce((s, c) => s + (parseFloat(c.preis) || 0), 0);
+  const active   = S.components.filter(c => c.active !== false);
+  const replaced = S.components.filter(c => c.active === false);
 
-  // Group by Baugruppe
+  const totalVal = active.reduce((s, c) => s + (parseFloat(c.preis) || 0), 0);
+
+  // Group active by Baugruppe
   const grouped = {};
-  S.components.forEach(c => {
-    (grouped[c.baugruppe] = grouped[c.baugruppe] || []).push(c);
-  });
+  active.forEach(c => { (grouped[c.baugruppe] = grouped[c.baugruppe] || []).push(c); });
   const groups = BAUGRUPPE_ORDER.filter(g => grouped[g]);
   Object.keys(grouped).forEach(g => { if (!groups.includes(g)) groups.push(g); });
 
-  const bodyHtml = groups.length === 0
+  const activeHtml = groups.length === 0
     ? `<div class="empty"><div class="empty-icon">🔩</div><p>Noch keine Bauteile</p>
         <button class="btn-empty" onclick="showComponentForm()">Bauteil hinzufügen</button></div>`
     : groups.map(g => `
         <div class="group-section">
           <div class="group-hdr">${g}</div>
-          ${grouped[g].map(c => `
-            <div class="comp-row">
-              <div class="comp-info">
-                <div class="comp-name">${c.komponente}</div>
-                ${[c.marke, c.produktname].filter(Boolean).length
-                  ? `<div class="comp-sub">${[c.marke, c.produktname].filter(Boolean).join(' · ')}</div>` : ''}
-                ${c.infos ? `<div class="comp-notes">${c.infos}</div>` : ''}
-                <div class="comp-meta">
-                  ${c.preis ? `<span class="comp-price">${fmtPrice(c.preis)}</span>` : ''}
-                  ${c.gekauft ? `<span class="comp-date">${fmtDate(c.gekauft)}</span>` : ''}
-                </div>
-              </div>
-              <div class="comp-actions">
-                <button class="btn-icon" onclick="showComponentForm('${c.id}')">✏️</button>
-                <button class="btn-icon danger" onclick="deleteComponent('${c.id}')">🗑️</button>
-              </div>
-            </div>`).join('')}
+          ${grouped[g].map(c => renderCompRow(c, false)).join('')}
         </div>`).join('');
+
+  // Replaced history
+  let replacedHtml = '';
+  if (S.showReplaced && replaced.length > 0) {
+    const rGrouped = {};
+    replaced.forEach(c => { (rGrouped[c.baugruppe] = rGrouped[c.baugruppe] || []).push(c); });
+    const rGroups = BAUGRUPPE_ORDER.filter(g => rGrouped[g]);
+    Object.keys(rGrouped).forEach(g => { if (!rGroups.includes(g)) rGroups.push(g); });
+    replacedHtml = `
+      <div class="section-divider">Ausgebaute Teile</div>
+      ${rGroups.map(g => `
+        <div class="group-section">
+          <div class="group-hdr">${g}</div>
+          ${rGrouped[g].map(c => renderCompRow(c, true)).join('')}
+        </div>`).join('')}`;
+  }
 
   v.innerHTML = `
     ${renderBikeChips()}
     <div class="page-hdr">
       <h1>Bauteile</h1>
-      <button class="btn-add" onclick="showComponentForm()">+ Neu</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        ${replaced.length > 0
+          ? `<button class="btn-history ${S.showReplaced ? 'active' : ''}"
+                     onclick="S.showReplaced=!S.showReplaced;render()">
+               Verlauf (${replaced.length})
+             </button>` : ''}
+        <button class="btn-add" onclick="showComponentForm()">+ Neu</button>
+      </div>
     </div>
     ${totalVal > 0
       ? `<div class="total-bar">
-           <span class="total-bar-lbl">Gesamtwert</span>
+           <span class="total-bar-lbl">Gesamtwert verbaut</span>
            <span class="total-bar-val">${fmtPrice(totalVal)}</span>
          </div>` : ''}
-    ${bodyHtml}`;
+    ${activeHtml}
+    ${replacedHtml}`;
 }
 
 // ── Fahrwerk dispatcher ──
@@ -464,7 +490,7 @@ async function renderSuspHistory() {
       <div class="susp-type">${isFork ? '🍴 Federgabel' : '🔵 Dämpfer'}${comp.serial ? ' · ' + comp.serial : ''}</div>
       ${maxBadges.length
         ? `<div class="max-badges">${maxBadges.map(m => `<span class="max-badge">${m}</span>`).join('')}</div>` : ''}
-      <div class="hint-clicks">Clicks immer vom voll geschlossen (voll im Uhrzeigersinn) Anschlag (= 0) zählen</div>
+      <div class="hint-clicks">Clicks immer vom voll zugezogenen Anschlag (= 0) zählen</div>
     </div>
     ${entries}
     <button class="fab" onclick="showSuspSettingForm()">＋</button>`;
@@ -656,6 +682,89 @@ async function deleteComponent(id) {
   const { error } = await sb.from('bike_components').delete().eq('id', id).eq('user_id', S.uid);
   if (error) { toast('Fehler: ' + error.message, 'err'); return; }
   toast('Gelöscht', 'ok');
+  await loadComponents(); render();
+}
+
+// ── Replace component (keeps old as history) ──
+function showReplaceForm(id) {
+  const old = S.components.find(x => x.id === id);
+  if (!old) return;
+  openModal(`
+    <div class="modal-header">
+      <h2 class="modal-title">Bauteil ersetzen</h2>
+      <button class="btn-icon" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="replace-old-info">
+        <div class="replace-old-label">Wird ersetzt</div>
+        <div class="replace-old-name">${old.komponente}</div>
+        ${[old.marke, old.produktname].filter(Boolean).length
+          ? `<div class="replace-old-sub">${[old.marke, old.produktname].filter(Boolean).join(' · ')}</div>` : ''}
+        ${old.preis ? `<div class="replace-old-sub">${fmtPrice(old.preis)}</div>` : ''}
+      </div>
+
+      <div class="form-section-title">Neues Bauteil</div>
+      <div class="fg"><label class="fi">Baugruppe *
+        <select id="f-baugruppe">
+          ${BAUGRUPPE_OPTIONS.map(g =>
+            `<option ${old.baugruppe === g ? 'selected' : ''}>${g}</option>`
+          ).join('')}
+        </select>
+      </label></div>
+      <div class="fg"><label class="fi">Komponente *
+        <input id="f-komponente" type="text" value="${old.komponente}" placeholder="z.B. Federgabel">
+      </label></div>
+      <div class="fg"><label class="fi">Marke
+        <input id="f-marke" type="text" value="">
+      </label></div>
+      <div class="fg"><label class="fi">Produktname
+        <input id="f-produktname" type="text" value="">
+      </label></div>
+      <div class="fg"><label class="fi">Infos / Notizen
+        <textarea id="f-infos" rows="2"></textarea>
+      </label></div>
+      <div class="form-row">
+        <div class="fg"><label class="fi">Gekauft
+          <input id="f-gekauft" type="date" value="">
+        </label></div>
+        <div class="fg"><label class="fi">Preis (€)
+          <input id="f-preis" type="number" step="0.01" min="0" value="">
+        </label></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Abbrechen</button>
+      <button class="btn-primary" onclick="replaceComponent('${id}')">Einbauen</button>
+    </div>`);
+}
+
+async function replaceComponent(oldId) {
+  const komp = getVal('f-komponente');
+  if (!komp) { toast('Komponente ist Pflichtfeld', 'err'); return; }
+
+  const newData = {
+    bike_id:    S.bikeId,
+    user_id:    S.uid,
+    baugruppe:  getVal('f-baugruppe'),
+    komponente: komp,
+    marke:      getVal('f-marke') || null,
+    produktname: getVal('f-produktname') || null,
+    infos:      getVal('f-infos') || null,
+    gekauft:    getVal('f-gekauft') || null,
+    preis:      getNum('f-preis'),
+    active:     true,
+  };
+
+  const { error: insertErr } = await sb.from('bike_components').insert(newData);
+  if (insertErr) { toast('Fehler: ' + insertErr.message, 'err'); return; }
+
+  const { error: updateErr } = await sb.from('bike_components')
+    .update({ active: false, replaced_at: today() })
+    .eq('id', oldId).eq('user_id', S.uid);
+  if (updateErr) { toast('Fehler: ' + updateErr.message, 'err'); return; }
+
+  closeModal();
+  toast('Bauteil ersetzt ✓', 'ok');
   await loadComponents(); render();
 }
 
@@ -982,7 +1091,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 });
 
 (async function init() {
-  S.uid = await resolveUserId();
+  S.uid = getUserId();
   await loadBikes();
   setTab('bikes');
 })();
